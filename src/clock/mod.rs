@@ -1,6 +1,6 @@
 use nannou::prelude::*;
 
-use crate::Drawable;
+use crate::{Drawable, RectUtils};
 
 #[derive(Default)]
 pub struct Clocklet {
@@ -45,7 +45,12 @@ impl Default for Clock {
 
 impl Drawable for Clock {
     fn draw(&self, bounds: Rect, draw: &Draw) {
-        self.clocklets[0][0].draw(bounds, draw);
+        let grid: [[Rect; 3]; 8] = bounds.grid();
+        for (i, col) in grid.into_iter().enumerate() {
+            for (j, rect) in col.into_iter().enumerate() {
+                self.clocklets[i][j].draw(rect, draw);
+            }
+        }
     }
 }
 
