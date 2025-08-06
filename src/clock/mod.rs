@@ -1,6 +1,11 @@
 use nannou::prelude::*;
 
-use std::{f64::consts::TAU, time::Duration};
+use std::{
+    cmp::Ordering,
+    f64::consts::TAU,
+    ops::{AddAssign, Mul, SubAssign},
+    time::Duration,
+};
 
 use crate::{Drawable, RectUtils};
 
@@ -9,6 +14,29 @@ pub struct Clocklet {
     hour_hand_turns: f64,
     /// minute hand expressed as fraction of a full turn
     minute_hand_turns: f64,
+}
+
+impl Mul<f64> for Clocklet {
+    type Output = Self;
+    fn mul(mut self, rhs: f64) -> Self::Output {
+        self.hour_hand_turns *= rhs;
+        self.minute_hand_turns *= rhs;
+        self
+    }
+}
+
+impl AddAssign for Clocklet {
+    fn add_assign(&mut self, rhs: Self) {
+        self.hour_hand_turns += rhs.hour_hand_turns;
+        self.minute_hand_turns += rhs.minute_hand_turns;
+    }
+}
+
+impl SubAssign<f64> for Clocklet {
+    fn sub_assign(&mut self, rhs: f64) {
+        self.hour_hand_turns -= rhs;
+        self.minute_hand_turns -= rhs;
+    }
 }
 
 impl Default for Clocklet {
@@ -49,6 +77,24 @@ enum Deadline {
     Relative(Duration),
 }
 
+impl PartialEq<Duration> for Deadline {
+    fn eq(&self, other: &Duration) -> bool {
+        match self {
+            Self::Relative(_) => false,
+            Self::Absolute(duration) => duration.eq(other),
+        }
+    }
+}
+
+impl PartialOrd<Duration> for Deadline {
+    fn partial_cmp(&self, other: &Duration) -> Option<std::cmp::Ordering> {
+        match self {
+            Self::Absolute(duration) => duration.partial_cmp(other),
+            Self::Relative(_) => Some(Ordering::Less),
+        }
+    }
+}
+
 impl Deadline {
     pub fn from_millis(millis: u64) -> Self {
         Self::Relative(Duration::from_millis(millis))
@@ -80,13 +126,18 @@ impl Lifespan {
                 deadline: deadline.absolute(update.since_start),
             };
         }
+        if let Lifespan::Active { ref deadline, .. } = self {
+            if *deadline < update.since_start {
+                return Self::Finished;
+            }
+        }
         self
     }
 }
 
 struct ClockTarget {
     target: [[Clocklet; 3]; 8],
-    extra_turns: [[f64; 3]; 8],
+    extra_turns: Option<[[f64; 3]; 8]>,
     pub lifespan: Lifespan,
 }
 
@@ -94,14 +145,16 @@ impl ClockTarget {
     pub fn random_milles(millis: u64) -> Self {
         Self {
             target: Default::default(),
-            extra_turns: [[3.0; 3]; 8],
+            extra_turns: Some([[3.0; 3]; 8]),
             lifespan: Lifespan::from_millis(millis),
         }
     }
 
-    pub fn update(mut self, update: &Update) -> Self {
+    /// Return updated target and extra turns
+    pub fn update(mut self, update: &Update) -> (Self, Option<[[f64; 3]; 8]>) {
         self.lifespan = self.lifespan.update(update);
-        self
+        let extra_turns = self.extra_turns.take();
+        (self, extra_turns)
     }
 
     pub fn is_finished(&self) -> bool {
@@ -166,12 +219,25 @@ impl Drawable for Clock {
 
     fn update(&mut self, update: &Update) {
         while let Some(target) = self.targets.pop() {
-            let updated = target.update(update);
+            let (updated, extra_turns) = target.update(update);
             if updated.is_finished() {
                 continue;
             }
+            if let Some(extra_turns) = extra_turns {
+                *self -= extra_turns;
+            }
             self.targets.push(updated);
             break;
+        }
+    }
+}
+
+impl SubAssign<[[f64; 3]; 8]> for Clock {
+    fn sub_assign(&mut self, rhs: [[f64; 3]; 8]) {
+        for (i, col) in self.clocklets.iter_mut().enumerate() {
+            for (j, clocklet) in col.iter_mut().enumerate() {
+                *clocklet -= rhs[i][j];
+            }
         }
     }
 }
