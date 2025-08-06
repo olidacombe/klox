@@ -1,6 +1,6 @@
 use nannou::prelude::*;
 
-use std::f64::consts::TAU;
+use std::{f64::consts::TAU, time::Duration};
 
 use crate::{Drawable, RectUtils};
 
@@ -9,10 +9,6 @@ pub struct Clocklet {
     hour_hand_turns: f64,
     /// minute hand expressed as fraction of a full turn
     minute_hand_turns: f64,
-    /// hour hand line weight
-    weight_hour_hand: f32,
-    /// minute hand line weight
-    weight_minute_hand: f32,
 }
 
 impl Default for Clocklet {
@@ -20,8 +16,6 @@ impl Default for Clocklet {
         Self {
             hour_hand_turns: random_f64(),
             minute_hand_turns: random_f64(),
-            weight_hour_hand: 5.0,
-            weight_minute_hand: 5.0,
         }
     }
 }
@@ -45,14 +39,54 @@ impl Drawable for Clocklet {
         draw.ellipse().xy(o).w_h(d, d).color(WHITE);
         let r = d * 0.45;
         let (hours, mins) = self.vectors();
-        draw.line()
-            .weight(self.weight_hour_hand)
-            .start(o)
-            .end(o + r * hours);
-        draw.line()
-            .weight(self.weight_minute_hand)
-            .start(o)
-            .end(o + r * mins);
+        draw.line().weight(5.0).start(o).end(o + r * hours);
+        draw.line().weight(5.0).start(o).end(o + r * mins);
+    }
+}
+
+enum Deadline {
+    Absolute(Duration),
+    Relative(Duration),
+}
+
+impl Deadline {
+    pub fn from_millis(millis: u64) -> Self {
+        Self::Relative(Duration::from_millis(millis))
+    }
+
+    pub fn absolute(self, now: Duration) -> Self {
+        match self {
+            Self::Absolute(t) => self,
+            Self::Relative(t) => Self::Absolute(now + t),
+        }
+    }
+}
+
+enum Lifespan {
+    Pending(Deadline),
+    Active { start: Duration, deadline: Deadline },
+    Finished,
+}
+
+impl Lifespan {
+    pub fn from_millis(millis: u64) -> Self {
+        Self::Pending(Deadline::from_millis(millis))
+    }
+}
+
+struct ClockTarget {
+    target: [[Clocklet; 3]; 8],
+    extra_turns: [[f64; 3]; 8],
+    lifespan: Lifespan,
+}
+
+impl ClockTarget {
+    pub fn random_milles(millis: u64) -> Self {
+        Self {
+            target: Default::default(),
+            extra_turns: [[3.0; 3]; 8],
+            lifespan: Lifespan::from_millis(millis),
+        }
     }
 }
 
@@ -72,7 +106,15 @@ struct Clock {
     /// }
     /// ```
     clocklets: [[Clocklet; 3]; 8],
+    /// Stack of animation targets to process
+    targets: Vec<ClockTarget>,
     padding: f32,
+}
+
+impl Clock {
+    pub fn push_target(&mut self, target: ClockTarget) {
+        self.targets.push(target);
+    }
 }
 
 impl Default for Clock {
@@ -80,6 +122,7 @@ impl Default for Clock {
         Self {
             padding: 8.0,
             clocklets: Default::default(),
+            targets: Default::default(),
         }
     }
 }
@@ -98,6 +141,12 @@ impl Drawable for Clock {
 pub struct Model {
     padding: f32,
     clock: Clock,
+}
+
+impl Model {
+    pub fn scramble_millis(&mut self, millis: u64) {
+        self.clock.push_target(ClockTarget::random_milles(millis));
+    }
 }
 
 impl Default for Model {
@@ -124,4 +173,20 @@ fn model(_app: &App) -> Model {
     Model::default()
 }
 
-fn event(_app: &App, _model: &mut Model, _event: Event) {}
+fn event(app: &App, model: &mut Model, event: Event) {
+    if let Event::WindowEvent {
+        simple: Some(WindowEvent::KeyPressed(key)),
+        ..
+    } = event
+    {
+        match key {
+            Key::Q => {
+                app.quit();
+            }
+            Key::R => {
+                model.scramble_millis(3);
+            }
+            _ => {}
+        }
+    }
+}
