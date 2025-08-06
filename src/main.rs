@@ -1,3 +1,4 @@
+use klox::Drawable;
 use klox::clock::{Model, app};
 use nannou::prelude::*;
 
