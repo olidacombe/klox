@@ -55,10 +55,10 @@ impl Deadline {
     }
 
     pub fn absolute(self, now: Duration) -> Self {
-        match self {
-            Self::Absolute(t) => self,
-            Self::Relative(t) => Self::Absolute(now + t),
+        if let Self::Relative(t) = self {
+            return Self::Absolute(now + t);
         }
+        self
     }
 }
 
@@ -72,12 +72,22 @@ impl Lifespan {
     pub fn from_millis(millis: u64) -> Self {
         Self::Pending(Deadline::from_millis(millis))
     }
+
+    pub fn update(self, update: &Update) -> Self {
+        if let Lifespan::Pending(deadline) = self {
+            return Self::Active {
+                start: update.since_start,
+                deadline: deadline.absolute(update.since_start),
+            };
+        }
+        self
+    }
 }
 
 struct ClockTarget {
     target: [[Clocklet; 3]; 8],
     extra_turns: [[f64; 3]; 8],
-    lifespan: Lifespan,
+    pub lifespan: Lifespan,
 }
 
 impl ClockTarget {
@@ -87,6 +97,18 @@ impl ClockTarget {
             extra_turns: [[3.0; 3]; 8],
             lifespan: Lifespan::from_millis(millis),
         }
+    }
+
+    pub fn update(mut self, update: &Update) -> Self {
+        self.lifespan = self.lifespan.update(update);
+        self
+    }
+
+    pub fn is_finished(&self) -> bool {
+        if let Lifespan::Finished = self.lifespan {
+            return true;
+        }
+        false
     }
 }
 
@@ -132,8 +154,24 @@ impl Drawable for Clock {
         let grid: [[Rect; 3]; 8] = bounds.grid();
         for (i, col) in grid.into_iter().enumerate() {
             for (j, rect) in col.into_iter().enumerate() {
-                self.clocklets[i][j].draw(rect.pad(self.padding), draw);
+                // FIXME: just to get evidence of new target being created
+                if let Some(target) = self.targets.first() {
+                    target.target[i][j].draw(rect.pad(self.padding), draw);
+                } else {
+                    self.clocklets[i][j].draw(rect.pad(self.padding), draw);
+                }
             }
+        }
+    }
+
+    fn update(&mut self, update: &Update) {
+        while let Some(target) = self.targets.pop() {
+            let updated = target.update(update);
+            if updated.is_finished() {
+                continue;
+            }
+            self.targets.push(updated);
+            break;
         }
     }
 }
@@ -163,6 +201,10 @@ impl Drawable for Model {
         let bounds = bounds.pad(self.padding);
         self.clock.draw(bounds, draw);
     }
+
+    fn update(&mut self, update: &Update) {
+        self.clock.update(update);
+    }
 }
 
 pub fn app() -> nannou::app::Builder<Model> {
@@ -174,12 +216,11 @@ fn model(_app: &App) -> Model {
 }
 
 fn event(app: &App, model: &mut Model, event: Event) {
-    if let Event::WindowEvent {
-        simple: Some(WindowEvent::KeyPressed(key)),
-        ..
-    } = event
-    {
-        match key {
+    match event {
+        Event::WindowEvent {
+            simple: Some(WindowEvent::KeyPressed(key)),
+            ..
+        } => match key {
             Key::Q => {
                 app.quit();
             }
@@ -187,6 +228,10 @@ fn event(app: &App, model: &mut Model, event: Event) {
                 model.scramble_millis(3);
             }
             _ => {}
+        },
+        Event::Update(ref update) => {
+            model.update(update);
         }
+        _ => {}
     }
 }

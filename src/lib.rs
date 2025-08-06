@@ -4,6 +4,7 @@ pub mod clock;
 
 pub trait Drawable {
     fn draw(&self, bounds: Rect, draw: &Draw);
+    fn update(&mut self, _update: &Update) {}
 }
 
 pub trait RectUtils: Sized + Copy {
