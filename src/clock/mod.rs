@@ -6,16 +6,22 @@ use crate::{Drawable, RectUtils};
 
 pub struct Clocklet {
     /// hour hand expressed as fraction of a full turn
-    a: f64,
+    hour_hand_turns: f64,
     /// minute hand expressed as fraction of a full turn
-    b: f64,
+    minute_hand_turns: f64,
+    /// hour hand line weight
+    weight_hour_hand: f32,
+    /// minute hand line weight
+    weight_minute_hand: f32,
 }
 
 impl Default for Clocklet {
     fn default() -> Self {
         Self {
-            a: random_f64(),
-            b: random_f64(),
+            hour_hand_turns: random_f64(),
+            minute_hand_turns: random_f64(),
+            weight_hour_hand: 5.0,
+            weight_minute_hand: 5.0,
         }
     }
 }
@@ -23,8 +29,8 @@ impl Default for Clocklet {
 impl Clocklet {
     /// Returns normal vectors corresponding to (a, b)
     fn vectors(&self) -> (Point2, Point2) {
-        let a_rad = TAU * self.a;
-        let b_rad = TAU * self.b;
+        let a_rad = TAU * self.hour_hand_turns;
+        let b_rad = TAU * self.minute_hand_turns;
         (
             Point2::new(a_rad.sin() as f32, a_rad.cos() as f32),
             Point2::new(b_rad.sin() as f32, b_rad.cos() as f32),
@@ -39,8 +45,14 @@ impl Drawable for Clocklet {
         draw.ellipse().xy(o).w_h(d, d).color(WHITE);
         let r = d * 0.45;
         let (hours, mins) = self.vectors();
-        draw.line().start(o).end(o + r * hours);
-        draw.line().start(o).end(o + r * mins);
+        draw.line()
+            .weight(self.weight_hour_hand)
+            .start(o)
+            .end(o + r * hours);
+        draw.line()
+            .weight(self.weight_minute_hand)
+            .start(o)
+            .end(o + r * mins);
     }
 }
 
