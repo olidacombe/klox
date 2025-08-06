@@ -20,6 +20,4 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     // put everything on the frame
     draw.to_frame(app, &frame).unwrap();
-
-    // model.draw(app, &frame);
 }
