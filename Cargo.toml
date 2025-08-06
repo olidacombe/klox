@@ -6,3 +6,5 @@ publish = ["gsr-remote"]
 
 [dependencies]
 nannou = { version = "0.19.0", registry = "gsr-remote" }
+tracing = { version = "0.1.41", registry = "gsr-remote" }
+tracing-subscriber = { version = "0.3.19", registry = "gsr-remote" }

@@ -1,4 +1,5 @@
 use nannou::prelude::*;
+use tracing::debug;
 
 use std::{
     cmp::Ordering,
@@ -72,6 +73,7 @@ impl Drawable for Clocklet {
     }
 }
 
+#[derive(Debug)]
 enum Deadline {
     Absolute(Duration),
     Relative(Duration),
@@ -90,7 +92,7 @@ impl PartialOrd<Duration> for Deadline {
     fn partial_cmp(&self, other: &Duration) -> Option<std::cmp::Ordering> {
         match self {
             Self::Absolute(duration) => duration.partial_cmp(other),
-            Self::Relative(_) => Some(Ordering::Less),
+            Self::Relative(_) => Some(Ordering::Greater),
         }
     }
 }
@@ -128,6 +130,7 @@ impl Lifespan {
         }
         if let Lifespan::Active { ref deadline, .. } = self {
             if *deadline < update.since_start {
+                debug!("{deadline:?} passed ({:?})", update.since_start);
                 return Self::Finished;
             }
         }
@@ -142,7 +145,7 @@ struct ClockTarget {
 }
 
 impl ClockTarget {
-    pub fn random_milles(millis: u64) -> Self {
+    pub fn random_millis(millis: u64) -> Self {
         Self {
             target: Default::default(),
             extra_turns: Some([[3.0; 3]; 8]),
@@ -249,7 +252,7 @@ pub struct Model {
 
 impl Model {
     pub fn scramble_millis(&mut self, millis: u64) {
-        self.clock.push_target(ClockTarget::random_milles(millis));
+        self.clock.push_target(ClockTarget::random_millis(millis));
     }
 }
 
@@ -291,7 +294,7 @@ fn event(app: &App, model: &mut Model, event: Event) {
                 app.quit();
             }
             Key::R => {
-                model.scramble_millis(3);
+                model.scramble_millis(3000);
             }
             _ => {}
         },

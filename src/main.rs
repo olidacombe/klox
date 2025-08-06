@@ -3,6 +3,7 @@ use klox::clock::{Model, app};
 use nannou::prelude::*;
 
 fn main() {
+    tracing_subscriber::fmt::init();
     app().simple_window(view).run();
 }
 
