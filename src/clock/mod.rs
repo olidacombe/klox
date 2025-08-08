@@ -2,7 +2,6 @@ use nannou::prelude::*;
 use tracing::debug;
 
 use std::{
-    cmp::Ordering,
     collections::VecDeque,
     f64::consts::TAU,
     ops::{Add, AddAssign, Mul, Sub, SubAssign},
@@ -11,12 +10,125 @@ use std::{
 
 use crate::{Drawable, RectUtils};
 
+struct Digit([Clocklet; 6]);
+
+impl Digit {
+    const ZERO: Self = Self([
+        Clocklet::TL,
+        Clocklet::TR,
+        Clocklet::V,
+        Clocklet::V,
+        Clocklet::BL,
+        Clocklet::BR,
+    ]);
+    const ONE: Self = Self([
+        Clocklet::TL,
+        Clocklet::TR,
+        Clocklet::V,
+        Clocklet::V,
+        Clocklet::BL,
+        Clocklet::BR,
+    ]);
+    const TWO: Self = Self([
+        Clocklet::TL,
+        Clocklet::TR,
+        Clocklet::V,
+        Clocklet::V,
+        Clocklet::BL,
+        Clocklet::BR,
+    ]);
+    const THREE: Self = Self([
+        Clocklet::TL,
+        Clocklet::TR,
+        Clocklet::V,
+        Clocklet::V,
+        Clocklet::BL,
+        Clocklet::BR,
+    ]);
+    const FOUR: Self = Self([
+        Clocklet::TL,
+        Clocklet::TR,
+        Clocklet::V,
+        Clocklet::V,
+        Clocklet::BL,
+        Clocklet::BR,
+    ]);
+    const FIVE: Self = Self([
+        Clocklet::TL,
+        Clocklet::TR,
+        Clocklet::V,
+        Clocklet::V,
+        Clocklet::BL,
+        Clocklet::BR,
+    ]);
+    const SIX: Self = Self([
+        Clocklet::TL,
+        Clocklet::TR,
+        Clocklet::V,
+        Clocklet::V,
+        Clocklet::BL,
+        Clocklet::BR,
+    ]);
+    const SEVEN: Self = Self([
+        Clocklet::TL,
+        Clocklet::TR,
+        Clocklet::V,
+        Clocklet::V,
+        Clocklet::BL,
+        Clocklet::BR,
+    ]);
+    const EIGHT: Self = Self([
+        Clocklet::TL,
+        Clocklet::TR,
+        Clocklet::V,
+        Clocklet::V,
+        Clocklet::BL,
+        Clocklet::BR,
+    ]);
+    const NINE: Self = Self([
+        Clocklet::TL,
+        Clocklet::TR,
+        Clocklet::V,
+        Clocklet::V,
+        Clocklet::BL,
+        Clocklet::BR,
+    ]);
+    const BLANK: Self = Self([Clocklet::BLANK; 6]);
+}
+
 #[derive(Clone, Copy)]
 pub struct Clocklet {
     /// hour hand expressed as fraction of a full turn
     hour_hand_turns: f64,
     /// minute hand expressed as fraction of a full turn
     minute_hand_turns: f64,
+}
+
+impl Clocklet {
+    /// Returns normal vectors corresponding to (a, b)
+    fn vectors(&self) -> (Point2, Point2) {
+        let a_rad = TAU * self.hour_hand_turns;
+        let b_rad = TAU * self.minute_hand_turns;
+        (
+            Point2::new(a_rad.sin() as f32, a_rad.cos() as f32),
+            Point2::new(b_rad.sin() as f32, b_rad.cos() as f32),
+        )
+    }
+
+    pub const fn from_turns(hour_hand_turns: f64, minute_hand_turns: f64) -> Self {
+        Self {
+            hour_hand_turns,
+            minute_hand_turns,
+        }
+    }
+
+    pub const BL: Clocklet = Clocklet::from_turns(0.0, 0.25);
+    pub const BLANK: Clocklet = Clocklet::from_turns(0.625, 0.625);
+    pub const BR: Clocklet = Clocklet::from_turns(0.0, 0.75);
+    pub const H: Clocklet = Clocklet::from_turns(0.25, 0.75);
+    pub const TL: Clocklet = Clocklet::from_turns(0.25, 0.5);
+    pub const TR: Clocklet = Clocklet::from_turns(0.5, 0.75);
+    pub const V: Clocklet = Clocklet::from_turns(0.0, 0.5);
 }
 
 impl Add for Clocklet {
@@ -70,18 +182,6 @@ impl Default for Clocklet {
             hour_hand_turns: random_f64(),
             minute_hand_turns: random_f64(),
         }
-    }
-}
-
-impl Clocklet {
-    /// Returns normal vectors corresponding to (a, b)
-    fn vectors(&self) -> (Point2, Point2) {
-        let a_rad = TAU * self.hour_hand_turns;
-        let b_rad = TAU * self.minute_hand_turns;
-        (
-            Point2::new(a_rad.sin() as f32, a_rad.cos() as f32),
-            Point2::new(b_rad.sin() as f32, b_rad.cos() as f32),
-        )
     }
 }
 
