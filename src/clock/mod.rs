@@ -3,6 +3,7 @@ use tracing::debug;
 
 use std::{
     cmp::Ordering,
+    collections::VecDeque,
     f64::consts::TAU,
     ops::{AddAssign, Mul, SubAssign},
     time::Duration,
@@ -130,7 +131,10 @@ impl Lifespan {
         }
         if let Lifespan::Active { ref deadline, .. } = self {
             if *deadline < update.since_start {
-                debug!("{deadline:?} passed ({:?})", update.since_start);
+                debug!(
+                    "{deadline:?} passed ({:?}), Lifespan -> Finished",
+                    update.since_start
+                );
                 return Self::Finished;
             }
         }
@@ -184,14 +188,14 @@ struct Clock {
     /// }
     /// ```
     clocklets: [[Clocklet; 3]; 8],
-    /// Stack of animation targets to process
-    targets: Vec<ClockTarget>,
+    /// Pipe of animation targets to process
+    targets: VecDeque<ClockTarget>,
     padding: f32,
 }
 
 impl Clock {
     pub fn push_target(&mut self, target: ClockTarget) {
-        self.targets.push(target);
+        self.targets.push_back(target);
     }
 }
 
@@ -211,7 +215,7 @@ impl Drawable for Clock {
         for (i, col) in grid.into_iter().enumerate() {
             for (j, rect) in col.into_iter().enumerate() {
                 // FIXME: just to get evidence of new target being created
-                if let Some(target) = self.targets.first() {
+                if let Some(target) = self.targets.front() {
                     target.target[i][j].draw(rect.pad(self.padding), draw);
                 } else {
                     self.clocklets[i][j].draw(rect.pad(self.padding), draw);
@@ -221,7 +225,7 @@ impl Drawable for Clock {
     }
 
     fn update(&mut self, update: &Update) {
-        while let Some(target) = self.targets.pop() {
+        while let Some(target) = self.targets.pop_front() {
             let (updated, extra_turns) = target.update(update);
             if updated.is_finished() {
                 continue;
@@ -229,7 +233,7 @@ impl Drawable for Clock {
             if let Some(extra_turns) = extra_turns {
                 *self -= extra_turns;
             }
-            self.targets.push(updated);
+            self.targets.push_front(updated);
             break;
         }
     }
