@@ -451,6 +451,8 @@ impl Default for Model {
 
 impl Drawable for Model {
     fn draw(&self, bounds: Rect, draw: &Draw) {
+        let (w, h) = bounds.w_h();
+        let bounds = Rect::from_w_h(clamp_max(w, h * 8.0 / 3.0), clamp_max(h, w * 3.0 / 8.0));
         let bounds = bounds.pad(self.padding);
         self.clock.draw(bounds, draw);
     }
