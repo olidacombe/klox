@@ -360,7 +360,8 @@ impl Clock {
         ClockTarget {
             clocklets: self.clocklets,
             extra_turns: None,
-            lifespan: Lifespan::default(),
+            // lifespan: Lifespan::default(),
+            lifespan: Lifespan::Pending(Duration::from_millis(1000)),
         }
     }
 
