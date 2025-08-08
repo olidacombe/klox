@@ -5,17 +5,40 @@ use std::{
     cmp::Ordering,
     collections::VecDeque,
     f64::consts::TAU,
-    ops::{AddAssign, Mul, SubAssign},
+    ops::{Add, AddAssign, Mul, Sub, SubAssign},
     time::Duration,
 };
 
 use crate::{Drawable, RectUtils};
 
+#[derive(Clone, Copy)]
 pub struct Clocklet {
     /// hour hand expressed as fraction of a full turn
     hour_hand_turns: f64,
     /// minute hand expressed as fraction of a full turn
     minute_hand_turns: f64,
+}
+
+impl Add for Clocklet {
+    type Output = Clocklet;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            hour_hand_turns: self.hour_hand_turns + rhs.hour_hand_turns,
+            minute_hand_turns: self.minute_hand_turns + rhs.minute_hand_turns,
+        }
+    }
+}
+
+impl Sub for Clocklet {
+    type Output = Clocklet;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self {
+            hour_hand_turns: self.hour_hand_turns - rhs.hour_hand_turns,
+            minute_hand_turns: self.minute_hand_turns - rhs.minute_hand_turns,
+        }
+    }
 }
 
 impl Mul<f64> for Clocklet {
@@ -123,6 +146,25 @@ struct ClockTarget {
 }
 
 impl ClockTarget {
+    pub fn progress(&self) -> f64 {
+        match self.lifespan {
+            Lifespan::Finished => 1.0,
+            Lifespan::Pending(_) => 0.0,
+            Lifespan::Active {
+                start,
+                current,
+                deadline,
+            } => {
+                let total = (deadline - start).as_secs_f64();
+                if total == 0.0 {
+                    1.0
+                } else {
+                    (current - start).as_secs_f64() / total
+                }
+            }
+        }
+    }
+
     pub fn random_millis(millis: u64) -> Self {
         Self {
             target: Default::default(),
@@ -171,6 +213,17 @@ impl Clock {
     pub fn push_target(&mut self, target: ClockTarget) {
         self.targets.push_back(target);
     }
+
+    pub fn lerp(&self, target: &ClockTarget) -> [[Clocklet; 3]; 8] {
+        let progress = target.progress();
+
+        core::array::from_fn(|col| {
+            core::array::from_fn(|row| {
+                self.clocklets[col][row]
+                    + (target.target[col][row] - self.clocklets[col][row]) * progress
+            })
+        })
+    }
 }
 
 impl Default for Clock {
@@ -186,14 +239,17 @@ impl Default for Clock {
 impl Drawable for Clock {
     fn draw(&self, bounds: Rect, draw: &Draw) {
         let grid: [[Rect; 3]; 8] = bounds.grid();
+
+        // FIXME more implicit cloning
+        let clocklets = self
+            .targets
+            .front()
+            .map(|targets| self.lerp(targets))
+            .unwrap_or(self.clocklets);
+
         for (i, col) in grid.into_iter().enumerate() {
             for (j, rect) in col.into_iter().enumerate() {
-                // FIXME: just to get evidence of new target being created
-                if let Some(target) = self.targets.front() {
-                    target.target[i][j].draw(rect.pad(self.padding), draw);
-                } else {
-                    self.clocklets[i][j].draw(rect.pad(self.padding), draw);
-                }
+                clocklets[i][j].draw(rect.pad(self.padding), draw);
             }
         }
     }
