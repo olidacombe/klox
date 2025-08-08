@@ -74,62 +74,35 @@ impl Drawable for Clocklet {
     }
 }
 
-#[derive(Debug)]
-enum Deadline {
-    Absolute(Duration),
-    Relative(Duration),
-}
-
-impl PartialEq<Duration> for Deadline {
-    fn eq(&self, other: &Duration) -> bool {
-        match self {
-            Self::Relative(_) => false,
-            Self::Absolute(duration) => duration.eq(other),
-        }
-    }
-}
-
-impl PartialOrd<Duration> for Deadline {
-    fn partial_cmp(&self, other: &Duration) -> Option<std::cmp::Ordering> {
-        match self {
-            Self::Absolute(duration) => duration.partial_cmp(other),
-            Self::Relative(_) => Some(Ordering::Greater),
-        }
-    }
-}
-
-impl Deadline {
-    pub fn from_millis(millis: u64) -> Self {
-        Self::Relative(Duration::from_millis(millis))
-    }
-
-    pub fn absolute(self, now: Duration) -> Self {
-        if let Self::Relative(t) = self {
-            return Self::Absolute(now + t);
-        }
-        self
-    }
-}
-
 enum Lifespan {
-    Pending(Deadline),
-    Active { start: Duration, deadline: Deadline },
+    Pending(Duration),
+    Active {
+        start: Duration,
+        current: Duration,
+        deadline: Duration,
+    },
     Finished,
 }
 
 impl Lifespan {
     pub fn from_millis(millis: u64) -> Self {
-        Self::Pending(Deadline::from_millis(millis))
+        Self::Pending(Duration::from_millis(millis))
     }
 
-    pub fn update(self, update: &Update) -> Self {
+    pub fn update(mut self, update: &Update) -> Self {
         if let Lifespan::Pending(deadline) = self {
             return Self::Active {
                 start: update.since_start,
-                deadline: deadline.absolute(update.since_start),
+                current: update.since_start,
+                deadline: update.since_start + deadline,
             };
         }
-        if let Lifespan::Active { ref deadline, .. } = self {
+        if let Lifespan::Active {
+            ref deadline,
+            ref mut current,
+            ..
+        } = self
+        {
             if *deadline < update.since_start {
                 debug!(
                     "{deadline:?} passed ({:?}), Lifespan -> Finished",
@@ -137,6 +110,7 @@ impl Lifespan {
                 );
                 return Self::Finished;
             }
+            *current = update.since_start;
         }
         self
     }
@@ -188,7 +162,7 @@ struct Clock {
     /// }
     /// ```
     clocklets: [[Clocklet; 3]; 8],
-    /// Pipe of animation targets to process
+    /// Queue of animation targets to process
     targets: VecDeque<ClockTarget>,
     padding: f32,
 }
