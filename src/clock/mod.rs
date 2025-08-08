@@ -258,6 +258,7 @@ impl Drawable for Clock {
         while let Some(target) = self.targets.pop_front() {
             let (updated, extra_turns) = target.update(update);
             if updated.is_finished() {
+                self.clocklets = updated.target;
                 continue;
             }
             if let Some(extra_turns) = extra_turns {
