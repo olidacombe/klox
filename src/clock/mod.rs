@@ -15,85 +15,93 @@ struct Digit([Clocklet; 6]);
 impl Digit {
     const ZERO: Self = Self([
         Clocklet::TL,
-        Clocklet::TR,
-        Clocklet::V,
         Clocklet::V,
         Clocklet::BL,
+        Clocklet::TR,
+        Clocklet::V,
         Clocklet::BR,
     ]);
     const ONE: Self = Self([
-        Clocklet::TL,
-        Clocklet::TR,
+        Clocklet::BLANK,
+        Clocklet::BLANK,
+        Clocklet::BLANK,
+        Clocklet::D,
         Clocklet::V,
-        Clocklet::V,
-        Clocklet::BL,
-        Clocklet::BR,
+        Clocklet::U,
     ]);
     const TWO: Self = Self([
+        Clocklet::R,
         Clocklet::TL,
-        Clocklet::TR,
-        Clocklet::V,
-        Clocklet::V,
         Clocklet::BL,
+        Clocklet::TR,
         Clocklet::BR,
+        Clocklet::L,
     ]);
     const THREE: Self = Self([
-        Clocklet::TL,
+        Clocklet::R,
+        Clocklet::R,
+        Clocklet::R,
         Clocklet::TR,
-        Clocklet::V,
-        Clocklet::V,
-        Clocklet::BL,
+        Clocklet::BR,
         Clocklet::BR,
     ]);
     const FOUR: Self = Self([
-        Clocklet::TL,
-        Clocklet::TR,
-        Clocklet::V,
-        Clocklet::V,
+        Clocklet::D,
         Clocklet::BL,
+        Clocklet::BLANK,
+        Clocklet::D,
         Clocklet::BR,
+        Clocklet::U,
     ]);
     const FIVE: Self = Self([
         Clocklet::TL,
-        Clocklet::TR,
-        Clocklet::V,
-        Clocklet::V,
         Clocklet::BL,
+        Clocklet::R,
+        Clocklet::L,
+        Clocklet::TR,
         Clocklet::BR,
     ]);
     const SIX: Self = Self([
         Clocklet::TL,
-        Clocklet::TR,
-        Clocklet::V,
         Clocklet::V,
         Clocklet::BL,
+        Clocklet::L,
+        Clocklet::TR,
         Clocklet::BR,
     ]);
     const SEVEN: Self = Self([
-        Clocklet::TL,
+        Clocklet::R,
+        Clocklet::BLANK,
+        Clocklet::BLANK,
         Clocklet::TR,
         Clocklet::V,
-        Clocklet::V,
-        Clocklet::BL,
-        Clocklet::BR,
+        Clocklet::U,
     ]);
     const EIGHT: Self = Self([
         Clocklet::TL,
-        Clocklet::TR,
-        Clocklet::V,
-        Clocklet::V,
         Clocklet::BL,
+        Clocklet::BL,
+        Clocklet::TR,
+        Clocklet::BR,
         Clocklet::BR,
     ]);
     const NINE: Self = Self([
         Clocklet::TL,
-        Clocklet::TR,
-        Clocklet::V,
-        Clocklet::V,
         Clocklet::BL,
+        Clocklet::R,
+        Clocklet::TR,
+        Clocklet::BR,
         Clocklet::BR,
     ]);
     const BLANK: Self = Self([Clocklet::BLANK; 6]);
+}
+
+impl<'a> IntoIterator for &'a Digit {
+    type Item = &'a Clocklet;
+    type IntoIter = std::slice::Iter<'a, Clocklet>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -126,9 +134,13 @@ impl Clocklet {
     pub const BLANK: Clocklet = Clocklet::from_turns(0.625, 0.625);
     pub const BR: Clocklet = Clocklet::from_turns(0.0, 0.75);
     pub const H: Clocklet = Clocklet::from_turns(0.25, 0.75);
-    pub const TL: Clocklet = Clocklet::from_turns(0.25, 0.5);
+    pub const L: Clocklet = Clocklet::from_turns(0.75, 0.75);
+    pub const R: Clocklet = Clocklet::from_turns(0.25, 0.25);
+    pub const TL: Clocklet = Clocklet::from_turns(0.5, 0.25);
     pub const TR: Clocklet = Clocklet::from_turns(0.5, 0.75);
     pub const V: Clocklet = Clocklet::from_turns(0.0, 0.5);
+    pub const U: Clocklet = Clocklet::from_turns(0.0, 0.0);
+    pub const D: Clocklet = Clocklet::from_turns(0.5, 0.5);
 }
 
 impl Add for Clocklet {
@@ -239,13 +251,32 @@ impl Lifespan {
     }
 }
 
+impl Default for Lifespan {
+    fn default() -> Self {
+        // Basically "immediately"
+        Self::Pending(Duration::default())
+    }
+}
+
 struct ClockTarget {
-    target: [[Clocklet; 3]; 8],
+    clocklets: [[Clocklet; 3]; 8],
     extra_turns: Option<[[f64; 3]; 8]>,
     pub lifespan: Lifespan,
 }
 
 impl ClockTarget {
+    pub fn set_digit(&mut self, digit: &Digit, position: usize) {
+        let position = (position % 4) * 2;
+
+        let scope = &mut self.clocklets[position..(position + 2)];
+
+        let clocklets = scope.iter_mut().flatten();
+
+        for (src, dst) in digit.into_iter().zip(clocklets) {
+            *dst = *src;
+        }
+    }
+
     pub fn progress(&self) -> f64 {
         match self.lifespan {
             Lifespan::Finished => 1.0,
@@ -267,7 +298,7 @@ impl ClockTarget {
 
     pub fn random_millis(millis: u64) -> Self {
         Self {
-            target: Default::default(),
+            clocklets: Default::default(),
             extra_turns: Some([[3.0; 3]; 8]),
             lifespan: Lifespan::from_millis(millis),
         }
@@ -320,9 +351,25 @@ impl Clock {
         core::array::from_fn(|col| {
             core::array::from_fn(|row| {
                 self.clocklets[col][row]
-                    + (target.target[col][row] - self.clocklets[col][row]) * progress
+                    + (target.clocklets[col][row] - self.clocklets[col][row]) * progress
             })
         })
+    }
+
+    fn as_target(&self) -> ClockTarget {
+        ClockTarget {
+            clocklets: self.clocklets,
+            extra_turns: None,
+            lifespan: Lifespan::default(),
+        }
+    }
+
+    /// Get a ClockTarget from Clock by replacing 6 clocklets with a given digit.
+    /// Useful for working on digit definitions
+    pub fn target_digit(&mut self, digit: &Digit, position: usize) {
+        let mut target = self.as_target();
+        target.set_digit(digit, position);
+        self.push_target(target);
     }
 }
 
@@ -358,7 +405,7 @@ impl Drawable for Clock {
         while let Some(target) = self.targets.pop_front() {
             let (updated, extra_turns) = target.update(update);
             if updated.is_finished() {
-                self.clocklets = updated.target;
+                self.clocklets = updated.clocklets;
                 continue;
             }
             if let Some(extra_turns) = extra_turns {
@@ -383,6 +430,7 @@ impl SubAssign<[[f64; 3]; 8]> for Clock {
 pub struct Model {
     padding: f32,
     clock: Clock,
+    debug_digit: usize,
 }
 
 impl Model {
@@ -396,6 +444,7 @@ impl Default for Model {
         Self {
             padding: 10.0,
             clock: Clock::default(),
+            debug_digit: 0,
         }
     }
 }
@@ -430,6 +479,50 @@ fn event(app: &App, model: &mut Model, event: Event) {
             }
             Key::R => {
                 model.scramble_millis(3000);
+            }
+            Key::Space => {
+                model.clock.target_digit(&Digit::BLANK, model.debug_digit);
+                model.debug_digit = (model.debug_digit + 1) % 4;
+            }
+            Key::Key0 => {
+                model.clock.target_digit(&Digit::ZERO, model.debug_digit);
+                model.debug_digit = (model.debug_digit + 1) % 4;
+            }
+            Key::Key1 => {
+                model.clock.target_digit(&Digit::ONE, model.debug_digit);
+                model.debug_digit = (model.debug_digit + 1) % 4;
+            }
+            Key::Key2 => {
+                model.clock.target_digit(&Digit::TWO, model.debug_digit);
+                model.debug_digit = (model.debug_digit + 1) % 4;
+            }
+            Key::Key3 => {
+                model.clock.target_digit(&Digit::THREE, model.debug_digit);
+                model.debug_digit = (model.debug_digit + 1) % 4;
+            }
+            Key::Key4 => {
+                model.clock.target_digit(&Digit::FOUR, model.debug_digit);
+                model.debug_digit = (model.debug_digit + 1) % 4;
+            }
+            Key::Key5 => {
+                model.clock.target_digit(&Digit::FIVE, model.debug_digit);
+                model.debug_digit = (model.debug_digit + 1) % 4;
+            }
+            Key::Key6 => {
+                model.clock.target_digit(&Digit::SIX, model.debug_digit);
+                model.debug_digit = (model.debug_digit + 1) % 4;
+            }
+            Key::Key7 => {
+                model.clock.target_digit(&Digit::SEVEN, model.debug_digit);
+                model.debug_digit = (model.debug_digit + 1) % 4;
+            }
+            Key::Key8 => {
+                model.clock.target_digit(&Digit::EIGHT, model.debug_digit);
+                model.debug_digit = (model.debug_digit + 1) % 4;
+            }
+            Key::Key9 => {
+                model.clock.target_digit(&Digit::NINE, model.debug_digit);
+                model.debug_digit = (model.debug_digit + 1) % 4;
             }
             _ => {}
         },
