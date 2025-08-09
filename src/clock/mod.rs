@@ -97,6 +97,24 @@ impl Digit {
     const BLANK: Self = Self([Clocklet::BLANK; 6]);
 }
 
+impl From<u64> for Digit {
+    fn from(value: u64) -> Self {
+        match value % 10 {
+            0 => Digit::ZERO,
+            1 => Digit::ONE,
+            2 => Digit::TWO,
+            3 => Digit::THREE,
+            4 => Digit::FOUR,
+            5 => Digit::FIVE,
+            6 => Digit::SIX,
+            7 => Digit::SEVEN,
+            8 => Digit::EIGHT,
+            9 => Digit::NINE,
+            _ => unreachable!(),
+        }
+    }
+}
+
 impl<'a> IntoIterator for &'a Digit {
     type Item = &'a Clocklet;
     type IntoIter = std::slice::Iter<'a, Clocklet>;
@@ -269,11 +287,17 @@ struct ClockTarget {
 impl ClockTarget {
     pub fn from_time(time: &Duration, lifespan: Lifespan) -> Self {
         let mut me = Self::default();
-        // TODO
-        me.set_digit(&Digit::ONE, 0);
-        me.set_digit(&Digit::FOUR, 1);
-        me.set_digit(&Digit::THREE, 2);
-        me.set_digit(&Digit::THREE, 3);
+
+        let time = time.as_secs() / 60;
+        let mut mins = time % 60;
+        let mut hours = (time / 60) % 24;
+        debug!("got time {hours}:{mins}");
+        me.set_digit(&mins.into(), 3);
+        mins /= 10;
+        me.set_digit(&mins.into(), 2);
+        me.set_digit(&hours.into(), 1);
+        hours /= 10;
+        me.set_digit(&hours.into(), 0);
         me.lifespan = lifespan;
         me
     }
