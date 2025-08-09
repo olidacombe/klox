@@ -432,20 +432,23 @@ pub struct Model {
     padding: f32,
     clock: Clock,
     debug_digit: usize,
+    pub background: wgpu::Texture,
 }
 
 impl Model {
     pub fn scramble_millis(&mut self, millis: u64) {
         self.clock.push_target(ClockTarget::random_millis(millis));
     }
-}
 
-impl Default for Model {
-    fn default() -> Self {
+    fn new(app: &App) -> Self {
+        let assets = app.assets_path().unwrap();
+        let img_path = assets.join("background.png"); // <-- Save your PNG here
+        let background = wgpu::Texture::from_path(app, img_path).unwrap();
         Self {
             padding: 10.0,
             clock: Clock::default(),
             debug_digit: 0,
+            background,
         }
     }
 }
@@ -467,8 +470,8 @@ pub fn app() -> nannou::app::Builder<Model> {
     nannou::app(model).event(event)
 }
 
-fn model(_app: &App) -> Model {
-    Model::default()
+fn model(app: &App) -> Model {
+    Model::new(app)
 }
 
 fn event(app: &App, model: &mut Model, event: Event) {

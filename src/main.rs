@@ -11,8 +11,10 @@ fn view(app: &App, model: &Model, frame: Frame) {
     // // get canvas to draw on
     let draw = app.draw();
 
-    // set background to blue
-    draw.background().color(BLUE);
+    // set background image
+    draw.texture(&model.background)
+        .wh(app.window_rect().wh()) // match window size
+        .xy(app.window_rect().xy()); // center
 
     let win = app.window_rect();
 
