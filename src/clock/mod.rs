@@ -1,12 +1,13 @@
 use nannou::image::GenericImageView;
 use nannou::prelude::*;
+use time::{OffsetDateTime, UtcOffset};
 use tracing::debug;
 
 use std::{
     collections::VecDeque,
     f64::consts::TAU,
     ops::{Add, AddAssign, Mul, Sub, SubAssign},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 
 use crate::{Drawable, RectUtils};
@@ -97,8 +98,8 @@ impl Digit {
     const BLANK: Self = Self([Clocklet::BLANK; 6]);
 }
 
-impl From<u64> for Digit {
-    fn from(value: u64) -> Self {
+impl From<u8> for Digit {
+    fn from(value: u8) -> Self {
         match value % 10 {
             0 => Digit::ZERO,
             1 => Digit::ONE,
@@ -285,12 +286,11 @@ struct ClockTarget {
 }
 
 impl ClockTarget {
-    pub fn from_time(time: &Duration, lifespan: Lifespan) -> Self {
+    pub fn from_time(time: &OffsetDateTime, lifespan: Lifespan) -> Self {
         let mut me = Self::default();
 
-        let time = time.as_secs() / 60;
-        let mut mins = time % 60;
-        let mut hours = (time / 60) % 24;
+        let mut mins = time.minute();
+        let mut hours = time.hour();
         debug!("got time {hours}:{mins}");
         me.set_digit(&mins.into(), 3);
         mins /= 10;
@@ -484,15 +484,17 @@ impl SubAssign<[[f64; 3]; 8]> for Clock {
 struct TriggerTime(bool);
 
 impl TriggerTime {
-    const LEAD_TIME_SECONDS: u64 = 5;
-    const TRIGGER_TIME_SECONDS: u64 = 60 - Self::LEAD_TIME_SECONDS;
+    const LEAD_TIME_SECONDS: u8 = 5;
+    const TRIGGER_TIME_SECONDS: u8 = 60 - Self::LEAD_TIME_SECONDS;
 
     pub fn trigger(&mut self) -> Option<ClockTarget> {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
+        // Get local time
+        let now_utc = OffsetDateTime::now_utc();
+        let local_offset = UtcOffset::current_local_offset().unwrap();
+        let now_local = now_utc.to_offset(local_offset);
 
-        let seconds = now.as_secs() % 60;
+        // Get the current seconds within the minute
+        let seconds = now_local.second();
 
         // We have already triggered, check if we should re-arm
         if self.0 && seconds < Self::TRIGGER_TIME_SECONDS {
@@ -501,8 +503,8 @@ impl TriggerTime {
             self.0 = true;
 
             let target = ClockTarget::from_time(
-                &(now + Duration::from_secs(Self::LEAD_TIME_SECONDS)),
-                Lifespan::from_millis(Self::LEAD_TIME_SECONDS * 1000),
+                &(now_local + Duration::from_secs(Self::LEAD_TIME_SECONDS as u64)),
+                Lifespan::from_millis(Self::LEAD_TIME_SECONDS as u64 * 1000),
             );
             return Some(target);
         }
