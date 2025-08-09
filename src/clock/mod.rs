@@ -6,7 +6,7 @@ use std::{
     collections::VecDeque,
     f64::consts::TAU,
     ops::{Add, AddAssign, Mul, Sub, SubAssign},
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use crate::{Drawable, RectUtils};
@@ -259,6 +259,7 @@ impl Default for Lifespan {
     }
 }
 
+#[derive(Default)]
 struct ClockTarget {
     clocklets: [[Clocklet; 3]; 8],
     extra_turns: Option<[[f64; 3]; 8]>,
@@ -266,6 +267,17 @@ struct ClockTarget {
 }
 
 impl ClockTarget {
+    pub fn from_time(time: &Duration, lifespan: Lifespan) -> Self {
+        let mut me = Self::default();
+        // TODO
+        me.set_digit(&Digit::ONE, 0);
+        me.set_digit(&Digit::FOUR, 1);
+        me.set_digit(&Digit::THREE, 2);
+        me.set_digit(&Digit::THREE, 3);
+        me.lifespan = lifespan;
+        me
+    }
+
     pub fn set_digit(&mut self, digit: &Digit, position: usize) {
         let position = (position % 4) * 2;
 
@@ -346,6 +358,18 @@ impl Clock {
         self.targets.push_back(target);
     }
 
+    pub fn clobber_targets(&mut self, target: ClockTarget) {
+        debug!("🔨 Clobbering clock with single target 🤷");
+        if let Some(ClockTarget {
+            lifespan: Lifespan::Active { .. },
+            ..
+        }) = self.targets.front()
+        {
+            self.clocklets = self.interpolated_clocklets();
+        }
+        self.targets = [target].into();
+    }
+
     pub fn lerp(&self, target: &ClockTarget) -> [[Clocklet; 3]; 8] {
         let progress = target.progress();
 
@@ -373,6 +397,14 @@ impl Clock {
         target.set_digit(digit, position);
         self.push_target(target);
     }
+
+    fn interpolated_clocklets(&self) -> [[Clocklet; 3]; 8] {
+        // FIXME more implicit cloning
+        self.targets
+            .front()
+            .map(|targets| self.lerp(targets))
+            .unwrap_or(self.clocklets)
+    }
 }
 
 impl Default for Clock {
@@ -389,12 +421,7 @@ impl Drawable for Clock {
     fn draw(&self, bounds: Rect, draw: &Draw) {
         let grid: [[Rect; 3]; 8] = bounds.grid();
 
-        // FIXME more implicit cloning
-        let clocklets = self
-            .targets
-            .front()
-            .map(|targets| self.lerp(targets))
-            .unwrap_or(self.clocklets);
+        let clocklets = self.interpolated_clocklets();
 
         for (i, col) in grid.into_iter().enumerate() {
             for (j, rect) in col.into_iter().enumerate() {
@@ -429,10 +456,42 @@ impl SubAssign<[[f64; 3]; 8]> for Clock {
     }
 }
 
+#[derive(Default)]
+struct TriggerTime(bool);
+
+impl TriggerTime {
+    const LEAD_TIME_SECONDS: u64 = 5;
+    const TRIGGER_TIME_SECONDS: u64 = 60 - Self::LEAD_TIME_SECONDS;
+
+    pub fn trigger(&mut self) -> Option<ClockTarget> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+
+        let seconds = now.as_secs() % 60;
+
+        // We have already triggered, check if we should re-arm
+        if self.0 && seconds < Self::TRIGGER_TIME_SECONDS {
+            self.0 = false;
+        } else if !self.0 && seconds >= Self::TRIGGER_TIME_SECONDS {
+            self.0 = true;
+
+            let target = ClockTarget::from_time(
+                &(now + Duration::from_secs(Self::LEAD_TIME_SECONDS)),
+                Lifespan::from_millis(Self::LEAD_TIME_SECONDS * 1000),
+            );
+            return Some(target);
+        }
+
+        None
+    }
+}
+
 pub struct Model {
     padding: f32,
     clock: Clock,
     debug_digit: usize,
+    trigger_time: TriggerTime,
     pub background: wgpu::Texture,
     pub background_width: f32,
     pub background_height: f32,
@@ -455,11 +514,12 @@ impl Model {
 
         Self {
             padding: 10.0,
-            clock: Clock::default(),
+            clock: Default::default(),
             debug_digit: 0,
             background,
             background_width: w as f32,
             background_height: h as f32,
+            trigger_time: Default::default(),
         }
     }
 }
@@ -544,6 +604,9 @@ fn event(app: &App, model: &mut Model, event: Event) {
             _ => {}
         },
         Event::Update(ref update) => {
+            if let Some(time_target) = model.trigger_time.trigger() {
+                model.clock.clobber_targets(time_target);
+            }
             model.update(update);
         }
         _ => {}
