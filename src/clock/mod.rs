@@ -1,3 +1,4 @@
+use nannou::image::GenericImageView;
 use nannou::prelude::*;
 use tracing::debug;
 
@@ -433,6 +434,8 @@ pub struct Model {
     clock: Clock,
     debug_digit: usize,
     pub background: wgpu::Texture,
+    pub background_width: f32,
+    pub background_height: f32,
 }
 
 impl Model {
@@ -441,14 +444,22 @@ impl Model {
     }
 
     fn new(app: &App) -> Self {
-        let assets = app.assets_path().unwrap();
-        let img_path = assets.join("background.png"); // <-- Save your PNG here
-        let background = wgpu::Texture::from_path(app, img_path).unwrap();
+        // Put your PNG in ./assets/background.png
+        let assets = app.assets_path().expect("assets dir");
+        let img_path = assets.join("background.png");
+
+        // Load once via image to get dimensions, then create a texture.
+        let img = nannou::image::open(&img_path).expect("open background.png");
+        let (w, h) = img.dimensions();
+        let background = wgpu::Texture::from_image(app, &img);
+
         Self {
             padding: 10.0,
             clock: Clock::default(),
             debug_digit: 0,
             background,
+            background_width: w as f32,
+            background_height: h as f32,
         }
     }
 }
