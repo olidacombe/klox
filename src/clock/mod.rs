@@ -302,6 +302,39 @@ impl ClockTarget {
         me
     }
 
+    pub fn horizontals(lifespan: Lifespan) -> Self {
+        let clocklets = [[Clocklet::H; 3]; 8];
+        Self {
+            clocklets,
+            extra_turns: None,
+            lifespan,
+        }
+    }
+
+    pub fn verticals(lifespan: Lifespan) -> Self {
+        let clocklets = [[Clocklet::V; 3]; 8];
+        Self {
+            clocklets,
+            extra_turns: None,
+            lifespan,
+        }
+    }
+
+    pub fn slashies(lifespan: Lifespan) -> Self {
+        let clocklets = core::array::from_fn(|col| {
+            core::array::from_fn(|row| {
+                let p = (3 * col + row) as f64 / 24.0;
+                let q = 1.0 - p;
+                Clocklet::H * p + Clocklet::V * q
+            })
+        });
+        Self {
+            clocklets,
+            extra_turns: None,
+            lifespan,
+        }
+    }
+
     pub fn set_digit(&mut self, digit: &Digit, position: usize) {
         let position = (position % 4) * 2;
 
@@ -626,6 +659,16 @@ fn event(app: &App, model: &mut Model, event: Event) {
             Key::Key9 => {
                 model.clock.target_digit(&Digit::NINE, model.debug_digit);
                 model.debug_digit = (model.debug_digit + 1) % 4;
+            }
+            Key::Minus => {
+                model
+                    .clock
+                    .push_target(ClockTarget::horizontals(Lifespan::from_millis(5000)));
+            }
+            Key::Backslash => {
+                model
+                    .clock
+                    .push_target(ClockTarget::slashies(Lifespan::from_millis(5000)));
             }
             _ => {}
         },
